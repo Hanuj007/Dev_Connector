@@ -5,8 +5,8 @@ const authController = {
   // POST /api/auth/register
   register: async (req, res, next) => {
     try {
-      const { name, email, password, username } = req.body;
-      const result = await authService.registerUser({ name, email, password, username });
+      const { name, email, password, username, skills } = req.body;
+      const result = await authService.registerUser({ name, email, password, username, skills });
 
       return res.status(201).json({
         message: 'User registered successfully',

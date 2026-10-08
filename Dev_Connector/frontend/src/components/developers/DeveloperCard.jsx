@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import TechPill from '../common/TechPill';
 import { useAuth } from '../../context/AuthContext';
@@ -11,7 +11,11 @@ export const DeveloperCard = ({ developer, isFollowingInitial = false, onFollowC
   const [isFollowing, setIsFollowing] = useState(isFollowingInitial);
   const [followLoading, setFollowLoading] = useState(false);
 
-  const isSelf = user?._id === developer._id;
+  useEffect(() => {
+    setIsFollowing(isFollowingInitial);
+  }, [isFollowingInitial]);
+
+  const isSelf = user?._id && String(user._id) === String(developer._id);
 
   const handleToggleFollow = async (e) => {
     e.preventDefault();

@@ -112,6 +112,35 @@ const followController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  // GET /api/follows/status/:userId - Check whether current user follows a developer (Protected)
+  checkFollowStatus: async (req, res, next) => {
+    try {
+      const targetUserId = req.params.userId;
+      const currentUserId = req.user._id;
+
+      if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+        return res.status(404).json({ message: 'User not found (invalid ID format)' });
+      }
+
+      // Check if current user is viewing themselves
+      if (String(currentUserId) === String(targetUserId)) {
+        return res.status(200).json({
+          isFollowing: false,
+          isSelf: true
+        });
+      }
+
+      const follow = await followRepository.findFollow(currentUserId, targetUserId);
+
+      return res.status(200).json({
+        isFollowing: !!follow,
+        isSelf: false
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 

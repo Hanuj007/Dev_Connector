@@ -23,6 +23,7 @@ export const ProfilePage = () => {
   const [posts, setPosts] = useState([]);
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
+  const [isFollowingState, setIsFollowingState] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,10 +47,27 @@ export const ProfilePage = () => {
         followApi.getFollowers(profileId).catch(() => []),
         followApi.getFollowing(profileId).catch(() => [])
       ]);
-      setFollowers(Array.isArray(followersList) ? followersList : []);
+      const validFollowers = Array.isArray(followersList) ? followersList : [];
+      setFollowers(validFollowers);
       setFollowing(Array.isArray(followingList) ? followingList : []);
 
-      // 3. Fetch GitHub Repos if developer has a githubUsername
+      // 3. Fetch authoritative follow status from DB if logged in and not self
+      if (currentUser?._id && String(currentUser._id) !== String(profileId)) {
+        try {
+          const isF = await followApi.checkFollowStatus(profileId);
+          setIsFollowingState(!!isF);
+        } catch {
+          setIsFollowingState(
+            validFollowers.some(
+              (f) => String(f.follower?._id || f.follower) === String(currentUser._id)
+            )
+          );
+        }
+      } else {
+        setIsFollowingState(false);
+      }
+
+      // 4. Fetch GitHub Repos if developer has a githubUsername
       if (user.githubUsername) {
         try {
           const userRepos = await githubApi.getGithubRepos(user.githubUsername);
@@ -61,7 +79,7 @@ export const ProfilePage = () => {
         setRepos([]);
       }
 
-      // 4. Fetch posts authored by this developer
+      // 5. Fetch posts authored by this developer
       try {
         const allPosts = await postApi.getAllPosts();
         const userPosts = allPosts.filter(
@@ -80,11 +98,32 @@ export const ProfilePage = () => {
 
   useEffect(() => {
     fetchProfileData();
-  }, [profileId]);
+  }, [profileId, currentUser?._id]);
 
-  const isFollowingInitial = followers.some(
-    (f) => String(f.follower?._id || f.follower) === String(currentUser?._id)
-  );
+  const handleFollowChange = (targetId, nowFollowing) => {
+    setIsFollowingState(nowFollowing);
+    if (nowFollowing) {
+      if (currentUser) {
+        setFollowers((prev) => [
+          ...prev,
+          {
+            _id: `temp-${Date.now()}`,
+            follower: {
+              _id: currentUser._id,
+              name: currentUser.name,
+              username: currentUser.username,
+              profileImage: currentUser.profileImage,
+              bio: currentUser.bio
+            }
+          }
+        ]);
+      }
+    } else {
+      setFollowers((prev) =>
+        prev.filter((f) => String(f.follower?._id || f.follower) !== String(currentUser?._id))
+      );
+    }
+  };
 
   const isSelf = currentUser?._id && String(currentUser._id) === String(developer?._id);
 
@@ -121,9 +160,10 @@ export const ProfilePage = () => {
           profileUser={developer}
           followersCount={followers.length}
           followingCount={following.length}
-          isFollowingInitial={isFollowingInitial}
+          isFollowingInitial={isFollowingState}
           onOpenFollowers={() => setFollowersModalOpen(true)}
           onOpenFollowing={() => setFollowingModalOpen(true)}
+          onFollowChange={handleFollowChange}
         />
 
         {/* GitHub Repositories Section */}

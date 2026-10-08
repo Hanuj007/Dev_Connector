@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const messageRepository = require('../repositories/messageRepository');
 const userRepository = require('../repositories/userRepository');
+const followRepository = require('../repositories/followRepository');
 const notificationService = require('../services/notificationService');
 
 // Message Controller handles 1-on-1 direct messages between developers
@@ -34,6 +35,14 @@ const messageController = {
         return res.status(404).json({ message: 'Receiver not found' });
       }
 
+      // Enforce follow restriction: A user can send messages ONLY to users they currently follow
+      const followRelationship = await followRepository.findFollow(senderId, receiver);
+      if (!followRelationship) {
+        return res.status(403).json({
+          message: 'You can only message users you follow.'
+        });
+      }
+
       // Create and save message
       const newMessage = await messageRepository.createMessage({
         sender: senderId,
@@ -47,6 +56,43 @@ const messageController = {
       return res.status(201).json({
         message: 'Message sent successfully',
         data: newMessage
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // GET /api/messages/permission/:userId - Check if current user is allowed to message target user (Protected)
+  checkPermission: async (req, res, next) => {
+    try {
+      const senderId = req.user._id;
+      const targetUserId = req.params.userId;
+
+      if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+        return res.status(404).json({ message: 'Invalid user ID format' });
+      }
+
+      if (String(senderId) === String(targetUserId)) {
+        return res.status(200).json({
+          canMessage: false,
+          isFollowing: false,
+          isSelf: true,
+          message: 'You cannot message yourself'
+        });
+      }
+
+      const targetUser = await userRepository.findById(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const follow = await followRepository.findFollow(senderId, targetUserId);
+
+      return res.status(200).json({
+        canMessage: !!follow,
+        isFollowing: !!follow,
+        isSelf: false,
+        message: follow ? 'Messaging allowed' : 'You can only message users you follow.'
       });
     } catch (error) {
       next(error);

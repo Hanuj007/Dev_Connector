@@ -520,6 +520,18 @@ or
   }
   ```
 
+#### 5. Check Follow Status
+- **URL:** `/api/follows/status/:userId`
+- **Method:** `GET`
+- **Access:** Protected (`Bearer <token>`)
+- **Response (`200 OK`):**
+  ```json
+  {
+    "isFollowing": true,
+    "isSelf": false
+  }
+  ```
+
 ---
 
 ### 🐙 GitHub API (`/api/github`)
@@ -578,6 +590,7 @@ or
 - **URL:** `/api/messages`
 - **Method:** `POST`
 - **Access:** Protected (`Bearer <token>`)
+- **Authorization Rule:** Current user **must follow** the receiver. If not following, returns `403 Forbidden`: `{"message": "You can only message users you follow."}`
 - **Request Body:**
   ```json
   {
@@ -599,8 +612,28 @@ or
     }
   }
   ```
+- **Error Response (`403 Forbidden`):**
+  ```json
+  {
+    "message": "You can only message users you follow."
+  }
+  ```
 
-#### 2. Get Conversation
+#### 2. Check Messaging Permission
+- **URL:** `/api/messages/permission/:userId`
+- **Method:** `GET`
+- **Access:** Protected (`Bearer <token>`)
+- **Response (`200 OK`):**
+  ```json
+  {
+    "canMessage": true,
+    "isFollowing": true,
+    "isSelf": false,
+    "message": "Messaging allowed"
+  }
+  ```
+
+#### 3. Get Conversation
 - **URL:** `/api/messages/:userId`
 - **Method:** `GET`
 - **Access:** Protected (`Bearer <token>`)

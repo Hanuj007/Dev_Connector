@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { userApi } from '../api/userApi';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
+import SkillsInput from '../components/profile/SkillsInput';
 
 export const EditProfilePage = () => {
   const { user, updateUserLocally, logout } = useAuth();
@@ -13,7 +14,7 @@ export const EditProfilePage = () => {
     name: '',
     username: '',
     bio: '',
-    skills: '',
+    skills: [],
     githubUsername: '',
     profileImage: ''
   });
@@ -27,12 +28,22 @@ export const EditProfilePage = () => {
         name: user.name || '',
         username: user.username || '',
         bio: user.bio || '',
-        skills: Array.isArray(user.skills) ? user.skills.join(', ') : '',
+        skills: Array.isArray(user.skills)
+          ? user.skills
+          : (user.skills ? user.skills.split(',').map((s) => s.trim()).filter(Boolean) : []),
         githubUsername: user.githubUsername || '',
         profileImage: user.profileImage || ''
       });
     }
   }, [user]);
+
+  const handleSkillsChange = (newSkills) => {
+    setFormData((prev) => ({
+      ...prev,
+      skills: newSkills
+    }));
+    if (errorMessage) setErrorMessage('');
+  };
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -163,20 +174,17 @@ export const EditProfilePage = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="skills">
-              Technical Skills (comma-separated)
+            <label className="form-label" htmlFor="skills-input">
+              Technical Skills
             </label>
-            <input
-              id="skills"
-              name="skills"
-              type="text"
-              className="form-input"
-              placeholder="e.g. React, Node.js, TypeScript, MongoDB, Go"
-              value={formData.skills}
-              onChange={handleChange}
+            <SkillsInput
+              selectedSkills={Array.isArray(formData.skills) ? formData.skills : []}
+              onChange={handleSkillsChange}
               disabled={saving}
             />
-            <span className="form-helper">Directly weights your matching engine profile (+10 pts per skill)</span>
+            <span className="form-helper" style={{ marginTop: '0.4rem', display: 'block' }}>
+              Select from popular suggestions or type to search. Directly weights your matching engine profile (+10 pts per skill).
+            </span>
           </div>
 
           <div className="form-group">

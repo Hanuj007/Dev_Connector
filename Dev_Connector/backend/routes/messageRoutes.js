@@ -7,6 +7,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 router.use(authMiddleware);
 
 router.post('/', messageController.sendMessage);
+router.get('/permission/:userId', messageController.checkPermission);
 router.get('/:userId', messageController.getConversation);
 router.put('/:id/read', messageController.markAsRead);
 router.delete('/:id', messageController.deleteMessage);

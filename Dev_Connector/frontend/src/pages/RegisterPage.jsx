@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
+import SkillsInput from '../components/profile/SkillsInput';
 
 export const RegisterPage = () => {
   const { register } = useAuth();
@@ -12,10 +13,19 @@ export const RegisterPage = () => {
     name: '',
     email: '',
     username: '',
-    password: ''
+    password: '',
+    skills: []
   });
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSkillsChange = (newSkills) => {
+    setFormData((prev) => ({
+      ...prev,
+      skills: newSkills
+    }));
+    if (errorMessage) setErrorMessage('');
+  };
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -161,6 +171,20 @@ export const RegisterPage = () => {
               autoComplete="new-password"
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="skills-input">
+              Technical Skills (optional)
+            </label>
+            <SkillsInput
+              selectedSkills={formData.skills}
+              onChange={handleSkillsChange}
+              disabled={loading}
+            />
+            <span className="form-helper" style={{ marginTop: '0.4rem', display: 'block' }}>
+              Select skills to power your developer recommendation matches
+            </span>
           </div>
 
           <button

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import TechPill from '../common/TechPill';
 import { useAuth } from '../../context/AuthContext';
@@ -11,7 +11,8 @@ export const ProfileHeader = ({
   followingCount = 0,
   isFollowingInitial = false,
   onOpenFollowers,
-  onOpenFollowing
+  onOpenFollowing,
+  onFollowChange
 }) => {
   const { user: currentUser, isAuthenticated } = useAuth();
   const { addToast } = useToast();
@@ -20,7 +21,12 @@ export const ProfileHeader = ({
   const [isFollowing, setIsFollowing] = useState(isFollowingInitial);
   const [followLoading, setFollowLoading] = useState(false);
 
-  const isSelf = currentUser?._id === profileUser._id;
+  // Sync state whenever prop updates (e.g. on profile reload/fetch)
+  useEffect(() => {
+    setIsFollowing(isFollowingInitial);
+  }, [isFollowingInitial]);
+
+  const isSelf = currentUser?._id && String(currentUser._id) === String(profileUser._id);
 
   const handleToggleFollow = async () => {
     if (!isAuthenticated) {
@@ -35,10 +41,12 @@ export const ProfileHeader = ({
         await followApi.unfollowUser(profileUser._id);
         setIsFollowing(false);
         addToast(`Unfollowed ${profileUser.name}`, 'info');
+        if (onFollowChange) onFollowChange(profileUser._id, false);
       } else {
         await followApi.followUser(profileUser._id);
         setIsFollowing(true);
         addToast(`Now following ${profileUser.name}`, 'success');
+        if (onFollowChange) onFollowChange(profileUser._id, true);
       }
     } catch (err) {
       addToast(err.message || 'Follow action failed', 'error');
@@ -253,7 +261,7 @@ export const ProfileHeader = ({
           </div>
 
           {/* Action CTAs */}
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {isSelf ? (
               <Link to="/edit-profile" className="btn btn-outline btn-sm">
                 Edit Profile
@@ -269,12 +277,42 @@ export const ProfileHeader = ({
                 >
                   {followLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
                 </button>
-                <Link
-                  to={`/messages?userId=${profileUser._id}`}
-                  className="btn btn-outline btn-sm"
-                >
-                  Direct Message
-                </Link>
+
+                {isFollowing ? (
+                  <Link
+                    to={`/messages?userId=${profileUser._id}`}
+                    className="btn btn-outline btn-sm"
+                  >
+                    Direct Message
+                  </Link>
+                ) : (
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled
+                      style={{
+                        opacity: 0.55,
+                        cursor: 'not-allowed',
+                        backgroundColor: 'var(--bg-secondary)',
+                        color: 'var(--text-tertiary)'
+                      }}
+                      title="Follow this user to send a message"
+                    >
+                      Direct Message
+                    </button>
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        color: 'var(--text-tertiary)',
+                        fontFamily: 'var(--font-mono)',
+                        marginTop: '0.3rem'
+                      }}
+                    >
+                      Follow this user to send a message
+                    </span>
+                  </div>
+                )}
               </>
             )}
           </div>

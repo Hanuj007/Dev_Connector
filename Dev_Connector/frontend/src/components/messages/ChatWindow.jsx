@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { messageApi } from '../../api/messageApi';
+import { followApi } from '../../api/followApi';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
 import Skeleton from '../common/Skeleton';
@@ -13,16 +14,24 @@ export const ChatWindow = ({ targetUser }) => {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Follow authorization state for messaging
+  const [isFollowingTarget, setIsFollowingTarget] = useState(false);
+  const [checkingFollow, setCheckingFollow] = useState(true);
+  const [followActionLoading, setFollowActionLoading] = useState(false);
+
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Check follow status & fetch messages whenever targetUser changes
   useEffect(() => {
     if (!targetUser?._id) return;
 
     let isMounted = true;
+
+    // 1. Fetch conversation history (keeps past dialogues intact)
     const fetchChat = async () => {
       try {
         setLoading(true);
@@ -39,7 +48,25 @@ export const ChatWindow = ({ targetUser }) => {
       }
     };
 
+    // 2. Authoritative check: verify if current user follows the recipient
+    const checkFollow = async () => {
+      try {
+        setCheckingFollow(true);
+        const status = await followApi.checkFollowStatus(targetUser._id);
+        if (isMounted) {
+          setIsFollowingTarget(Boolean(status));
+        }
+      } catch (err) {
+        if (isMounted) {
+          setIsFollowingTarget(false);
+        }
+      } finally {
+        if (isMounted) setCheckingFollow(false);
+      }
+    };
+
     fetchChat();
+    checkFollow();
 
     // Polling every 6 seconds for active direct chat updates
     const interval = setInterval(fetchChat, 6000);
@@ -53,9 +80,36 @@ export const ChatWindow = ({ targetUser }) => {
     scrollToBottom();
   }, [messages]);
 
+  // Handle follow / unfollow toggle directly inside the chat window
+  const handleToggleFollow = async () => {
+    if (!targetUser?._id) return;
+    try {
+      setFollowActionLoading(true);
+      if (isFollowingTarget) {
+        await followApi.unfollowUser(targetUser._id);
+        setIsFollowingTarget(false);
+        addToast(`Unfollowed ${targetUser.name}. Messaging is now restricted.`, 'info');
+      } else {
+        await followApi.followUser(targetUser._id);
+        setIsFollowingTarget(true);
+        addToast(`Now following ${targetUser.name}! Messaging enabled.`, 'success');
+      }
+    } catch (err) {
+      addToast(err.message || 'Follow action failed', 'error');
+    } finally {
+      setFollowActionLoading(false);
+    }
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputText.trim() || sending) return;
+
+    // Client-side guard aligned with backend rule
+    if (!isFollowingTarget) {
+      addToast('You can only message users you follow.', 'error');
+      return;
+    }
 
     const messageText = inputText.trim();
     setInputText('');
@@ -65,7 +119,14 @@ export const ChatWindow = ({ targetUser }) => {
       const newMsg = await messageApi.sendMessage(targetUser._id, messageText);
       setMessages((prev) => [...prev, newMsg]);
     } catch (err) {
-      addToast(err.message || 'Failed to send message', 'error');
+      const errorMsg =
+        err.response?.data?.message || err.message || 'Failed to send message';
+      addToast(errorMsg, 'error');
+
+      // If backend rejected with 403 (unfollowed in another tab), update status
+      if (err.response?.status === 403) {
+        setIsFollowingTarget(false);
+      }
       setInputText(messageText);
     } finally {
       setSending(false);
@@ -156,12 +217,24 @@ export const ChatWindow = ({ targetUser }) => {
           </div>
         </Link>
 
-        <Link to={`/profile/${targetUser._id}`} className="btn btn-outline btn-sm">
-          View Profile ↗
-        </Link>
+        {/* Header Action Buttons (Follow toggle + View Profile) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <button
+            type="button"
+            onClick={handleToggleFollow}
+            disabled={followActionLoading || checkingFollow}
+            className={`btn btn-sm ${isFollowingTarget ? 'btn-outline' : 'btn-primary'}`}
+            style={{ minWidth: '95px' }}
+          >
+            {followActionLoading ? '...' : isFollowingTarget ? 'Following' : '+ Follow'}
+          </button>
+          <Link to={`/profile/${targetUser._id}`} className="btn btn-outline btn-sm">
+            View Profile ↗
+          </Link>
+        </div>
       </div>
 
-      {/* Message Feed */}
+      {/* Message Feed (Previous messages are preserved even if unfollowed) */}
       <div
         style={{
           flex: 1,
@@ -181,7 +254,9 @@ export const ChatWindow = ({ targetUser }) => {
           </div>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', margin: 'auto', color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>
-            No messages yet. Say hello and introduce your engineering stack!
+            {isFollowingTarget
+              ? 'No messages yet. Say hello and introduce your engineering stack!'
+              : 'Follow this developer to start the discussion.'}
           </div>
         ) : (
           messages.map((msg) => {
@@ -236,6 +311,39 @@ export const ChatWindow = ({ targetUser }) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Follow Enforcement Notice Banner if user does NOT follow recipient */}
+      {!isFollowingTarget && !checkingFollow && (
+        <div
+          style={{
+            padding: '0.75rem 1.25rem',
+            backgroundColor: 'var(--bg-secondary)',
+            borderTop: '1px solid var(--border-hairline)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            fontSize: '0.86rem',
+            color: 'var(--text-secondary)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '1rem' }}>🔒</span>
+            <span>
+              <strong>Follow required:</strong> You can only message users you follow.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleFollow}
+            disabled={followActionLoading}
+            className="btn btn-primary btn-sm"
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {followActionLoading ? '...' : `Follow ${targetUser.name}`}
+          </button>
+        </div>
+      )}
+
       {/* Input Composer */}
       <form
         onSubmit={handleSend}
@@ -250,16 +358,24 @@ export const ChatWindow = ({ targetUser }) => {
         <input
           type="text"
           className="form-input"
-          placeholder="Type a direct message..."
+          placeholder={
+            !isFollowingTarget
+              ? 'Follow this user to send a message'
+              : 'Type a direct message...'
+          }
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          disabled={sending}
-          style={{ flex: 1 }}
+          disabled={sending || !isFollowingTarget || checkingFollow}
+          style={{
+            flex: 1,
+            backgroundColor: !isFollowingTarget ? 'var(--bg-secondary)' : undefined,
+            cursor: !isFollowingTarget ? 'not-allowed' : 'text'
+          }}
         />
         <button
           type="submit"
           className="btn btn-primary btn-sm"
-          disabled={sending || !inputText.trim()}
+          disabled={sending || !inputText.trim() || !isFollowingTarget || checkingFollow}
           style={{ minWidth: '90px' }}
         >
           {sending ? '...' : 'Send'}

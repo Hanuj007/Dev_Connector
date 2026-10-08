@@ -5,7 +5,7 @@ const generateToken = require('../utils/generateToken');
 // Authentication Service handles business logic for registration and login
 const authService = {
   // Register a new user
-  registerUser: async ({ name, email, password, username }) => {
+  registerUser: async ({ name, email, password, username, skills }) => {
     // Validate required fields
     if (!name || !email || !password) {
       const error = new Error('Please provide name, email and password');
@@ -35,12 +35,21 @@ const authService = {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Parse and normalize skills if provided
+    let parsedSkills = [];
+    if (skills) {
+      parsedSkills = Array.isArray(skills)
+        ? skills
+        : String(skills).split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
     // Create user in database
     const newUser = await userRepository.createUser({
       name,
       email,
       password: hashedPassword,
-      username: username || undefined
+      username: username || undefined,
+      skills: parsedSkills
     });
 
     // Generate JWT token

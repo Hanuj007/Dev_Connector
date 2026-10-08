@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { userApi } from '../api/userApi';
+import { followApi } from '../api/followApi';
+import { useAuth } from '../context/AuthContext';
 import DeveloperCard from '../components/developers/DeveloperCard';
 import DeveloperFilters from '../components/developers/DeveloperFilters';
 import { CardSkeleton } from '../components/common/Skeleton';
 import EmptyState from '../components/common/EmptyState';
 
 export const DiscoverPage = () => {
+  const { user: currentUser } = useAuth();
   const [developers, setDevelopers] = useState([]);
+  const [followingIds, setFollowingIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -19,6 +23,20 @@ export const DiscoverPage = () => {
       setError(null);
       const data = await userApi.getAllUsers();
       setDevelopers(Array.isArray(data) ? data : []);
+
+      if (currentUser?._id) {
+        try {
+          const myFollowing = await followApi.getFollowing(currentUser._id);
+          const ids = new Set(
+            (Array.isArray(myFollowing) ? myFollowing : []).map(
+              (f) => String(f.following?._id || f.following || f._id)
+            )
+          );
+          setFollowingIds(ids);
+        } catch (followErr) {
+          console.warn('Could not load following list:', followErr.message);
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to load developers directory');
     } finally {
@@ -28,7 +46,16 @@ export const DiscoverPage = () => {
 
   useEffect(() => {
     fetchDevelopers();
-  }, []);
+  }, [currentUser?._id]);
+
+  const handleFollowChange = (devId, isNowFollowing) => {
+    setFollowingIds((prev) => {
+      const next = new Set(prev);
+      if (isNowFollowing) next.add(String(devId));
+      else next.delete(String(devId));
+      return next;
+    });
+  };
 
   const filteredDevelopers = useMemo(() => {
     return developers.filter((dev) => {
@@ -123,7 +150,12 @@ export const DiscoverPage = () => {
             }}
           >
             {filteredDevelopers.map((dev) => (
-              <DeveloperCard key={dev._id} developer={dev} />
+              <DeveloperCard
+                key={dev._id}
+                developer={dev}
+                isFollowingInitial={followingIds.has(String(dev._id))}
+                onFollowChange={handleFollowChange}
+              />
             ))}
           </div>
         )}

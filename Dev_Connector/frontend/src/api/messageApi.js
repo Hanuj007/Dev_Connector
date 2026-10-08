@@ -19,5 +19,10 @@ export const messageApi = {
   deleteMessage: async (id) => {
     const res = await api.delete(`/api/messages/${id}`);
     return res.data;
+  },
+
+  checkPermission: async (userId) => {
+    const res = await api.get(`/api/messages/permission/${userId}`);
+    return res.data;
   }
 };

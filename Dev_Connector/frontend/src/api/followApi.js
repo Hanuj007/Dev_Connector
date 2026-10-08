@@ -19,5 +19,10 @@ export const followApi = {
   getFollowing: async (userId) => {
     const res = await api.get(`/api/follows/following/${userId}`);
     return res.data.following;
+  },
+
+  checkFollowStatus: async (userId) => {
+    const res = await api.get(`/api/follows/status/${userId}`);
+    return res.data.isFollowing;
   }
 };
